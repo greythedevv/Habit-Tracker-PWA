@@ -5,8 +5,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-import SignupPage from "@/app/signup/page";
-import LoginPage from "@/app/login/page";
+import SignupForm from "@/components/auth/SignupForm";
+import LoginForm from "@/components/auth/LoginForm";
 
 beforeEach(() => {
   localStorage.clear();
@@ -14,7 +14,7 @@ beforeEach(() => {
 
 describe("auth flow", () => {
   it("submits the signup form and creates a session", () => {
-    render(<SignupPage />);
+    render(<SignupForm />);
 
     fireEvent.change(screen.getByTestId("auth-signup-email"), {
       target: { value: "newuser@test.com" },
@@ -31,9 +31,17 @@ describe("auth flow", () => {
   });
 
   it("shows an error for duplicate signup email", () => {
-    render(<SignupPage />);
+    // Pre-seed an existing user
+    const existing = {
+      id: "existing-1",
+      email: "dupe@test.com",
+      password: "password123",
+      createdAt: new Date().toISOString(),
+    };
+    localStorage.setItem("habit-tracker-users", JSON.stringify([existing]));
 
-    // First signup
+    render(<SignupForm />);
+
     fireEvent.change(screen.getByTestId("auth-signup-email"), {
       target: { value: "dupe@test.com" },
     });
@@ -42,27 +50,10 @@ describe("auth flow", () => {
     });
     fireEvent.click(screen.getByTestId("auth-signup-submit"));
 
-    // Second signup with same email — need fresh render
-    localStorage.removeItem("habit-tracker-session");
-    render(<SignupPage />);
-
-    const emails = screen.getAllByTestId("auth-signup-email");
-    const passwords = screen.getAllByTestId("auth-signup-password");
-    const submits = screen.getAllByTestId("auth-signup-submit");
-
-    fireEvent.change(emails[emails.length - 1], {
-      target: { value: "dupe@test.com" },
-    });
-    fireEvent.change(passwords[passwords.length - 1], {
-      target: { value: "password123" },
-    });
-    fireEvent.click(submits[submits.length - 1]);
-
     expect(screen.getByText("User already exists")).toBeTruthy();
   });
 
   it("submits the login form and stores the active session", () => {
-    // Pre-create a user
     const user = {
       id: "user-1",
       email: "login@test.com",
@@ -71,7 +62,7 @@ describe("auth flow", () => {
     };
     localStorage.setItem("habit-tracker-users", JSON.stringify([user]));
 
-    render(<LoginPage />);
+    render(<LoginForm />);
 
     fireEvent.change(screen.getByTestId("auth-login-email"), {
       target: { value: "login@test.com" },
@@ -88,7 +79,7 @@ describe("auth flow", () => {
   });
 
   it("shows an error for invalid login credentials", () => {
-    render(<LoginPage />);
+    render(<LoginForm />);
 
     fireEvent.change(screen.getByTestId("auth-login-email"), {
       target: { value: "wrong@test.com" },

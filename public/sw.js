@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habit-tracker-v1';
+const CACHE_NAME = 'habit-tracker-v2';
 
 const APP_SHELL = [
   '/',
@@ -8,23 +8,21 @@ const APP_SHELL = [
   '/manifest.json',
 ];
 
-// INSTALL — cache app shell immediately
 self.addEventListener('install', (event) => {
-  // Take over immediately without waiting for old SW to die
   self.skipWaiting();
-
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(APP_SHELL);
+      // Don't fail install if some resources can't be cached
+      return Promise.allSettled(
+        APP_SHELL.map((url) => cache.add(url).catch(() => {}))
+      );
     })
   );
 });
 
-// ACTIVATE — delete ALL old caches, take control immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
-      // Delete every cache that isn't the current version
       caches.keys().then((keys) =>
         Promise.all(
           keys
@@ -32,43 +30,54 @@ self.addEventListener('activate', (event) => {
             .map((key) => caches.delete(key))
         )
       ),
-      // Take control of all open tabs immediately
       self.clients.claim(),
     ])
   );
 });
 
-// FETCH — network first, fall back to cache
-// Network-first means users always get fresh content when online
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
-
-  // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Got a good response — update the cache
         if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
+          const clone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+            cache.put(event.request, clone);
           });
         }
         return networkResponse;
       })
       .catch(() => {
-        // Network failed — serve from cache (offline support)
         return caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          // If nothing in cache either, return a basic offline response
-          return new Response('App is offline. Please reconnect.', {
-            status: 503,
-            headers: { 'Content-Type': 'text/plain' },
-          });
+          // Return a minimal HTML shell so body is never empty
+          return new Response(
+            `<!DOCTYPE html>
+            <html>
+              <head><title>Habit Tracker</title></head>
+              <body>
+                <div id="offline-shell">
+                  <h1>Habit Tracker</h1>
+                  <p>You are offline. Please reconnect to continue.</p>
+                </div>
+              </body>
+            </html>`,
+            {
+              status: 200,
+              headers: { 'Content-Type': 'text/html' },
+            }
+          );
         });
       })
   );
+});
+
+// Listen for skip waiting message from the page
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

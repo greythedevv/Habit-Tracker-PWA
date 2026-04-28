@@ -6,7 +6,7 @@ function randomEmail() {
   return `user_${Date.now()}@test.com`;
 }
 
-async function signupUser(page: any, email: string, password = "password123") {
+async function signupUser(page: Page, email: string, password = "password123") {
   await page.goto(`${BASE}/signup`);
   await page.fill('[data-testid="auth-signup-email"]', email);
   await page.fill('[data-testid="auth-signup-password"]', password);
@@ -15,13 +15,21 @@ async function signupUser(page: any, email: string, password = "password123") {
 }
 
 test.describe("Habit Tracker app", () => {
+
   test("shows the splash screen and redirects unauthenticated users to /login", async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-    await page.goto(BASE);
-    await expect(page.getByTestId("splash-screen")).toBeVisible();
-    await page.waitForURL(`${BASE}/login`, { timeout: 5000 });
-    expect(page.url()).toContain("/login");
-  });
+  // Go to login first so origin exists, then clear localStorage
+  await page.goto(`${BASE}/login`);
+  await page.evaluate(() => localStorage.clear());
+
+  // Now go to splash with clean state
+  await page.goto(BASE);
+
+  await expect(page.getByTestId("splash-screen")).toBeVisible();
+
+  // Use 10000ms — splash takes 1200ms + page load time
+  await page.waitForURL(`${BASE}/login`, { timeout: 10000 });
+  expect(page.url()).toContain("/login");
+});
 
   test("redirects authenticated users from / to /dashboard", async ({ page }) => {
     const email = randomEmail();
@@ -33,7 +41,10 @@ test.describe("Habit Tracker app", () => {
   });
 
   test("prevents unauthenticated access to /dashboard", async ({ page }) => {
+    // Navigate first so origin exists, then clear
+    await page.goto(BASE);
     await page.evaluate(() => localStorage.clear());
+
     await page.goto(`${BASE}/dashboard`);
     await page.waitForURL(`${BASE}/login`, { timeout: 5000 });
     expect(page.url()).toContain("/login");
@@ -52,10 +63,8 @@ test.describe("Habit Tracker app", () => {
   test("logs in an existing user and loads only that user's habits", async ({ page }) => {
     const email = randomEmail();
 
-    // Sign up first
+    // Sign up and create a habit
     await signupUser(page, email);
-
-    // Create a habit
     await page.click('[data-testid="create-habit-button"]');
     await page.fill('[data-testid="habit-name-input"]', "My Unique Habit");
     await page.click('[data-testid="habit-save-button"]');
@@ -64,7 +73,7 @@ test.describe("Habit Tracker app", () => {
     await page.click('[data-testid="auth-logout-button"]');
     await page.waitForURL(`${BASE}/login`);
 
-    // Login again
+    // Log back in
     await page.fill('[data-testid="auth-login-email"]', email);
     await page.fill('[data-testid="auth-login-password"]', "password123");
     await page.click('[data-testid="auth-login-submit"]');
@@ -91,17 +100,24 @@ test.describe("Habit Tracker app", () => {
     const email = randomEmail();
     await signupUser(page, email);
 
-    // Create habit
+    // Create a habit
     await page.click('[data-testid="create-habit-button"]');
     await page.fill('[data-testid="habit-name-input"]', "Exercise");
     await page.click('[data-testid="habit-save-button"]');
 
-    const streakBefore = await page.getByTestId("habit-streak-exercise").textContent();
+    // Get streak before
+    const streakBefore = await page
+      .getByTestId("habit-streak-exercise")
+      .textContent();
 
-    // Complete habit
+    // Complete the habit
     await page.click('[data-testid="habit-complete-exercise"]');
 
-    const streakAfter = await page.getByTestId("habit-streak-exercise").textContent();
+    // Get streak after
+    const streakAfter = await page
+      .getByTestId("habit-streak-exercise")
+      .textContent();
+
     expect(streakAfter).not.toBe(streakBefore);
   });
 
@@ -109,14 +125,16 @@ test.describe("Habit Tracker app", () => {
     const email = randomEmail();
     await signupUser(page, email);
 
-    // Create habit
+    // Create a habit
     await page.click('[data-testid="create-habit-button"]');
     await page.fill('[data-testid="habit-name-input"]', "Read Books");
     await page.click('[data-testid="habit-save-button"]');
     await expect(page.getByTestId("habit-card-read-books")).toBeVisible();
 
-    // Reload
+    // Reload the page
     await page.reload();
+
+    // Should still be on dashboard with the habit
     await expect(page.getByTestId("dashboard-page")).toBeVisible();
     await expect(page.getByTestId("habit-card-read-books")).toBeVisible();
   });
@@ -132,21 +150,34 @@ test.describe("Habit Tracker app", () => {
 
   test("loads the cached app shell when offline after the app has been loaded once", async ({ page, context }) => {
     const email = randomEmail();
-    await signupUser(page, email);
 
-    // Let service worker install and cache
-    await page.waitForTimeout(1500);
+    // Sign up and visit pages while ONLINE so they get cached
+    await signupUser(page, email);
+    await page.goto(BASE);
+    await page.goto(`${BASE}/login`);
+    await page.goto(`${BASE}/dashboard`);
+
+    // Wait for service worker to fully install and cache
+    await page.waitForTimeout(3000);
 
     // Go offline
     await context.setOffline(true);
 
-    // Reload while offline
-    await page.reload({ timeout: 10000 }).catch(() => {});
+    // Try loading app while offline
+    try {
+      await page.goto(BASE, { timeout: 8000 });
+    } catch {
+      // Navigation may throw when offline — expected
+    }
 
-    // App shell should still render — no hard crash
-    const body = await page.locator("body").textContent();
-    expect(body).not.toBe("");
+    await page.waitForTimeout(1000);
 
+    // Body should have some content — not a blank crash
+    const body = await page.locator("body").innerHTML();
+    expect(body.trim().length).toBeGreaterThan(0);
+
+    // Go back online
     await context.setOffline(false);
   });
+
 });

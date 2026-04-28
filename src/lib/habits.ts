@@ -18,8 +18,11 @@ export function toggleHabitCompletion(
     updatedCompletions = completions.filter((d) => d !== date);
   }
 
+  // ✅ FIX: always remove duplicates
+  const uniqueCompletions = Array.from(new Set(updatedCompletions));
+
   return {
     ...habit,
-    completions: updatedCompletions,
+    completions: uniqueCompletions,
   };
 }

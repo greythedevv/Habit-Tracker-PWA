@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { calculateCurrentStreak } from "@/lib/streaks";
 
+
 /* MENTOR_TRACE_STAGE3_HABIT_A91 */
 
 describe("calculateCurrentStreak", () => {
@@ -36,3 +37,4 @@ describe("calculateCurrentStreak", () => {
     ).toBe(1);
   });
 });
+
