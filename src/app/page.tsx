@@ -7,8 +7,40 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
+    // Register service worker and check for updates
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((registration) => {
+          // Check for updates every time the page loads
+          registration.update();
+
+          // When a new SW is waiting, activate it immediately
+          registration.addEventListener("updatefound", () => {
+            const newWorker = registration.installing;
+            if (!newWorker) return;
+
+            newWorker.addEventListener("statechange", () => {
+              if (
+                newWorker.state === "installed" &&
+                navigator.serviceWorker.controller
+              ) {
+                // New version available — tell it to skip waiting
+                newWorker.postMessage({ type: "SKIP_WAITING" });
+              }
+            });
+          });
+        })
+        .catch(() => {});
+
+      // When the SW changes, reload once to get the fresh version
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
     }
 
     const timer = setTimeout(() => {
