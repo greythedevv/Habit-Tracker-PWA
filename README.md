@@ -24,7 +24,7 @@ Habit Tracker lets you:
 **Prerequisites:** Node.js 18+, npm
 
 ```bash
-git clone <your-repo-url>
+git clone <https://github.com/greythedevv/Habit-Tracker-PWA.git>
 cd habit-tracker
 npm install
 npx playwright install   # installs browsers for E2E tests
