@@ -4,7 +4,7 @@ A mobile-first Progressive Web App for building and tracking daily habits.
 Built with Next.js App Router, React, TypeScript, and Tailwind CSS.
 All data is stored locally in the browser via `localStorage` — no backend required.
 
----
+-
 
 ## Project Overview
 
