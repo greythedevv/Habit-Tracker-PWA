@@ -87,7 +87,7 @@ Array of registered users:
 ]
 ```
 
-### `habit-tracker-session`
+### `habit tracker session`
 The active session, or `null` when logged out:
 ```json
 {
